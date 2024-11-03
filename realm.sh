@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 检查realm是否已安装
-if [ -f "/root/realm/realm" ]; then
+if [ -f "/etc/realm/realm" ]; then
     echo "检测到realm已安装。"
     realm_status="已安装"
     realm_status_color="\033[0;32m" # 绿色
@@ -48,8 +48,8 @@ show_menu() {
 
 # 部署环境的函数
 deploy_realm() {
-    mkdir -p /root/realm
-    cd /root/realm
+    mkdir -p /etc/realm
+    cd /etc/realm
     wget -O realm.tar.gz https://github.com/zhboner/realm/releases/download/v2.6.2/realm-x86_64-unknown-linux-gnu.tar.gz
     tar -xvf realm.tar.gz
     chmod +x realm
@@ -65,36 +65,36 @@ User=root
 Restart=on-failure
 RestartSec=5s
 DynamicUser=true
-WorkingDirectory=/root/realm
-ExecStart=/root/realm/realm -c /root/realm/config.toml
+WorkingDirectory=/etc/realm
+ExecStart=/etc/realm/realm -c /etc/realm/config.toml
 
 [Install]
 WantedBy=multi-user.target" > /etc/systemd/system/realm.service
     systemctl daemon-reload
 
     # 服务启动后，检查config.toml是否存在，如果不存在则创建
-    if [ ! -f /root/realm/config.toml ]; then
-        touch /root/realm/config.toml
+    if [ ! -f /etc/realm/config.toml ]; then
+        touch /etc/realm/config.toml
     fi
 
 # 检查 config.toml 中是否已经包含 [network] 配置块
-    network_count=$(grep -c '^\[network\]' /root/realm/config.toml)
+    network_count=$(grep -c '^\[network\]' /etc/realm/config.toml)
 
     if [ "$network_count" -eq 0 ]; then
     # 如果没有找到 [network]，将其添加到文件顶部
     echo "[network]
 no_tcp = false
 use_udp = true
-" | cat - /root/realm/config.toml > temp && mv temp /root/realm/config.toml
+" | cat - /etc/realm/config.toml > temp && mv temp /etc/realm/config.toml
     echo "[network] 配置已添加到 config.toml 文件。"
     
     elif [ "$network_count" -gt 1 ]; then
     # 如果找到多个 [network]，删除多余的配置块，只保留第一个
-    sed -i '0,/^\[\[endpoints\]\]/{//!d}' /root/realm/config.toml
+    sed -i '0,/^\[\[endpoints\]\]/{//!d}' /etc/realm/config.toml
     echo "[network]
 no_tcp = false
 use_udp = true
-" | cat - /root/realm/config.toml > temp && mv temp /root/realm/config.toml
+" | cat - /etc/realm/config.toml > temp && mv temp /etc/realm/config.toml
     echo "多余的 [network] 配置已删除。"
     else
     echo "[network] 配置已存在，跳过添加。"
@@ -112,7 +112,7 @@ uninstall_realm() {
     systemctl disable realm
     rm -rf /etc/systemd/system/realm.service
     systemctl daemon-reload
-    rm -rf /root/realm
+    rm -rf /etc/realm
     rm -rf "$(pwd)"/realm.sh
     sed -i '/realm/d' /etc/crontab
     echo "realm已被卸载。"
@@ -126,7 +126,7 @@ delete_forward() {
     echo "当前转发规则："
     local IFS=$'\n' # 设置IFS仅以换行符作为分隔符
     # 搜索所有包含 [[endpoints]] 的行，表示转发规则的起始行
-    local lines=($(grep -n '^\[\[endpoints\]\]' /root/realm/config.toml))
+    local lines=($(grep -n '^\[\[endpoints\]\]' /etc/realm/config.toml))
     
     if [ ${#lines[@]} -eq 0 ]; then
         echo "没有发现任何转发规则。"
@@ -140,9 +140,9 @@ delete_forward() {
         local listen_line=$((line_number + 2))
         local remote_line=$((line_number + 3))
 
-        local remark=$(sed -n "${remark_line}p" /root/realm/config.toml | grep "^# 备注:" | cut -d ':' -f 2)
-        local listen_info=$(sed -n "${listen_line}p" /root/realm/config.toml | cut -d '"' -f 2)
-        local remote_info=$(sed -n "${remote_line}p" /root/realm/config.toml | cut -d '"' -f 2)
+        local remark=$(sed -n "${remark_line}p" /etc/realm/config.toml | grep "^# 备注:" | cut -d ':' -f 2)
+        local listen_info=$(sed -n "${listen_line}p" /etc/realm/config.toml | cut -d '"' -f 2)
+        local remote_info=$(sed -n "${remote_line}p" /etc/realm/config.toml | cut -d '"' -f 2)
 
         local listen_ip_port=$listen_info
         local remote_ip_port=$remote_info
@@ -173,21 +173,21 @@ delete_forward() {
     local start_line=$(echo $chosen_line | cut -d ':' -f 1)
 
     # 找到下一个 [[endpoints]] 行，确定删除范围的结束行
-    local next_endpoints_line=$(grep -n '^\[\[endpoints\]\]' /root/realm/config.toml | grep -A 1 "^$start_line:" | tail -n 1 | cut -d ':' -f 1)
+    local next_endpoints_line=$(grep -n '^\[\[endpoints\]\]' /etc/realm/config.toml | grep -A 1 "^$start_line:" | tail -n 1 | cut -d ':' -f 1)
     
     if [ -z "$next_endpoints_line" ] || [ "$next_endpoints_line" -le "$start_line" ]; then
         # 如果没有找到下一个 [[endpoints]]，则删除到文件末尾
-        end_line=$(wc -l < /root/realm/config.toml)
+        end_line=$(wc -l < /etc/realm/config.toml)
     else
         # 如果找到了下一个 [[endpoints]]，则删除到它的前一行
         end_line=$((next_endpoints_line - 1))
     fi
 
     # 使用 sed 删除指定行范围的内容
-    sed -i "${start_line},${end_line}d" /root/realm/config.toml
+    sed -i "${start_line},${end_line}d" /etc/realm/config.toml
 
     # 检查并删除可能多余的空行
-    sed -i '/^\s*$/d' /root/realm/config.toml
+    sed -i '/^\s*$/d' /etc/realm/config.toml
 
     echo "转发规则及其备注已删除。"
 }
@@ -197,7 +197,7 @@ show_all_conf() {
     echo "当前转发规则："
     local IFS=$'\n' # 设置IFS仅以换行符作为分隔符
     # 搜索所有包含 listen 的行，表示转发规则的起始行
-    local lines=($(grep -n 'listen =' /root/realm/config.toml))
+    local lines=($(grep -n 'listen =' /etc/realm/config.toml))
     
     if [ ${#lines[@]} -eq 0 ]; then
         echo "没有发现任何转发规则。"
@@ -207,9 +207,9 @@ show_all_conf() {
     local index=1
     for line in "${lines[@]}"; do
         local line_number=$(echo $line | cut -d ':' -f 1)
-        local listen_info=$(sed -n "${line_number}p" /root/realm/config.toml | cut -d '"' -f 2)
-        local remote_info=$(sed -n "$((line_number + 1))p" /root/realm/config.toml | cut -d '"' -f 2)
-        local remark=$(sed -n "$((line_number-1))p" /root/realm/config.toml | grep "^# 备注:" | cut -d ':' -f 2)
+        local listen_info=$(sed -n "${line_number}p" /etc/realm/config.toml | cut -d '"' -f 2)
+        local remote_info=$(sed -n "$((line_number + 1))p" /etc/realm/config.toml | cut -d '"' -f 2)
+        local remark=$(sed -n "$((line_number-1))p" /etc/realm/config.toml | grep "^# 备注:" | cut -d ':' -f 2)
         
         local listen_ip_port=$listen_info
         local remote_ip_port=$remote_info
@@ -231,7 +231,7 @@ add_forward() {
         echo "[[endpoints]]
 # 备注: $remark
 listen = \"[::]:$local_port\"
-remote = \"$ip:$port\"" >> /root/realm/config.toml
+remote = \"$ip:$port\"" >> /etc/realm/config.toml
         
         read -p "是否继续添加(Y/N)? " answer
         if [[ $answer != "Y" && $answer != "y" ]]; then
