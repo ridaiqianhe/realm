@@ -6,4 +6,4 @@
 
 ```bash
 bash <(wget -qO- https://raw.githubusercontent.com/ridaiqianhe/realm/refs/heads/main/realm.sh -o realm.sh)
-```
+ 
